@@ -119,31 +119,31 @@ def spectral(
 
     return computed_labels, SSE, ARI, eigenvalues
 
-def spectral_hyperparameter_study(data, labels) :
+def spectral_hyperparameter_study(data, labels):
     """
     Perform hyperparameter study for spectral clustering on the given data.
 
     Arguments:
     - data: input data array of shape (n_samples, n_features)
     - labels: true labels of the data
-    - sigma_range: Range for sigma hyperparameter
 
     Return values:
-    - best_sse: Best SSE achieved during hyperparameter study
+    - sigmas: Array of sigma values
+    - ari_scores: Array of ARI scores for each sigma value
+    - sse_scores: Array of SSE scores for each sigma value
     """
-    best_sse = float('inf')
-    
-    sigmas = np.logspace(-1, 1, num=10) 
+    ari_scores = []
+    sse_scores = []
+
+    sigmas = np.logspace(-1, 1, num=10)  
+    k = 5  
 
     for sigma in sigmas:
-        # Perform spectral clustering with current hyperparameters
-        computed_labels, sse, _, _ = spectral(data, labels, {'sigma': sigma, 'k': 5})
+        _, sse, ari, _ = spectral(data, labels, {'sigma': sigma, 'k': k})
+        sse_scores.append(sse)
+        ari_scores.append(ari)
 
-        if sse < best_sse:
-            best_sse = sse
-            best_sigma = sigma
-
-    return best_sigma, 5
+    return sigmas, np.array(ari_scores), np.array(sse_scores)
 
 def spectral_clustering():
     """
@@ -170,18 +170,45 @@ def spectral_clustering():
     
     data_subset = cluster_data[:1000]
     labels_subset = cluster_labels[:1000]
-
-
-    # Perform hyperparameter study
-    best_sigma,best_k = spectral_hyperparameter_study(data_subset, labels_subset)
+    
+    sigmas, ari_scores, sse_scores = spectral_hyperparameter_study(data_subset, labels_subset)
+    
+    pdf_pages = pdf.PdfPages("spectral_clustering_plots.pdf")
+    
+    # Plot ARI scores against sigma values
+    plt.figure(figsize=(8, 6))
+    plt.plot(sigmas, ari_scores, marker='o', color='b')
+    plt.title('ARI Scores vs Sigma Values')
+    plt.xlabel('Sigma')
+    plt.ylabel('ARI')
+    plt.grid(True)
+    plt.xscale('log') 
+    pdf_pages.savefig() 
+    plt.close()
+    
+    # Plot SSE scores against sigma values
+    plt.figure(figsize=(8, 6))
+    plt.plot(sigmas, sse_scores, marker='o', color='r')
+    plt.title('SSE Scores vs Sigma Values')
+    plt.xlabel('Sigma')
+    plt.ylabel('SSE')
+    plt.grid(True)
+    plt.xscale('log') 
+    pdf_pages.savefig() 
+    plt.close()
+    
+    
+    # After hyperparameter study
+    best_sigma = 0.1
+    best_k = 5
     
     plots_values={}
     # Apply best hyperparameters on five slices of data
     for i in [0,1,2,3,4]:
         data_slice = cluster_data[i * 1000: (i + 1) * 1000]
         labels_slice = cluster_labels[i * 1000: (i + 1) * 1000]
-        computed_labels, sse, ari, eig_values = spectral(data_slice, labels_slice, {'sigma': 0.1, 'k': best_k})
-        groups[i] = {"sigma": 0.1, "ARI": ari, "SSE": sse}
+        computed_labels, sse, ari, eig_values = spectral(data_slice, labels_slice, {'sigma': best_sigma, 'k': best_k})
+        groups[i] = {"sigma": best_sigma, "ARI": ari, "SSE": sse}
         plots_values[i] = {"computed_labels": computed_labels, "ARI": ari, "SSE": sse,"eig_values":eig_values} 
         
     highest_ari = -1
@@ -191,7 +218,6 @@ def spectral_clustering():
             highest_ari = group_info['ARI']
             best_dataset_index = i
             
-    pdf_pages = pdf.PdfPages("spectral_clustering_plots.pdf")
     
     # Plot the clusters for the dataset with the highest ARI
     plt.figure(figsize=(8, 6))
